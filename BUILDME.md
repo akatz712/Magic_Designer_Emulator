@@ -1,4 +1,12 @@
 To build the executable DesignerFlagg for Linux, simply `./compile_linux`
+Alternatively, You can run these commands if you have autotools installed :
+```
+aclocal
+autoconf
+automake --add-missing
+./configure
+make
+```
 
 For Linux, there are two dependencies, FLTK and libharu. I have built this program with the following distributions, requiring that these packages were installed prior:
 

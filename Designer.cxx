@@ -15,6 +15,7 @@
 #include <FL/Fl_Slider.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/fl_ask.H>
+#include <FL/Fl_PNG_Image.H>
 
 #define DEPTH 4
 
@@ -29,11 +30,6 @@ extern int draw_magic(magic *, DIV *);
 #include "armsplace5.xpm"
 #include "armsplace6.xpm"
 #include "pdfx.xpm"
-
-#ifdef linux
-#include "icon.xbm" // needed to place -Wno-narrowing into compiling for this
-Pixmap p; //for window icon
-#endif
 
 // stuff for PDF output ----------------------------------------
 #include <setjmp.h>
@@ -156,6 +152,8 @@ Fl_Check_Button *bClip,*bShape,*bFine,*bPrime;
 Fl_Counter *cLPeg, *cRPeg, *cLArm, *cRArm, *cLGearA, *cRGearA, *cLPegA, *cRPegA, *cArmAdjust;
 Fl_Simple_Counter *cCenter, *cLGear, *cRGear;
 Fl_Pixmap *armp[6], *PDFimage;
+
+Fl_PNG_Image *icon_img;
 
 static int l,t,r,b;
 static float radiusX, radiusY, centerX, centerY;
@@ -1625,9 +1623,7 @@ void startwin() {
 	win->resizable(win);
 	win->callback(quit_cb,(void *)0);
 	inresize = false;
-#ifdef linux
-	win->icon((const void*)p);
-#endif
+	win->icon(icon_img);
 	win->show();
 }
 
@@ -1656,13 +1652,8 @@ int main(int argc, char **argv) {
 	}
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
-
-#ifdef linux
-fl_open_display(); // needed if display has not been previously opened
-p = XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
-                                 icon_bits, icon_width, icon_height);
-#endif
-
+	icon_img = new Fl_PNG_Image("icon.png"); // load icon
+  
 	// allocate stuff
 	stack = new Segment[MAX]; /* stack of filled segments */
 	sp = stack;
@@ -1977,9 +1968,7 @@ p = XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
 	showT();
 	set_controls();
 	buttons->end();
-#ifdef linux
-	buttons->icon((const void*)p);
-#endif
+	buttons->icon(icon_img);
 	buttons->show();
 
 	return Fl::run();

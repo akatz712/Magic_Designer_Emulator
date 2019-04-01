@@ -1653,7 +1653,7 @@ int main(int argc, char **argv) {
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
 	icon_img = new Fl_PNG_Image("icon.png"); // load icon
-  
+
 	// allocate stuff
 	stack = new Segment[MAX]; /* stack of filled segments */
 	sp = stack;

@@ -6,5 +6,5 @@ AC_PROG_CXX
 AC_CONFIG_FILES([Makefile])
 CC=g++
 CXXFLAGS="$CXXFLAGS `fltk-config --cxxflags` -Wno-narrowing"
-LDFLAGS="$LDFLAGS `fltk-config --use-images --ldflags` -lhpdf -s -no-pie"
+LIBS="`fltk-config --use-images --ldflags` -lhpdf"
 AC_OUTPUT

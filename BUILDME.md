@@ -29,19 +29,20 @@ Note that it is possible to set up MinGW and Msys on a MS Windows system and do 
 
 2. Each was extracted to its folder under Home, lets call them fltk and hpdf
 
-3. For fltk: `./configure –host=x86_64-w64-mingw32`
+3. For fltk: `./configure --host=x86_64-w64-mingw32`
 4. `make`
 5. If make stops before completing the tests, it is okay.
 6. create include and lib folders under fltk/zlib
 7. Copy/rename fltk/lib/libfltk_z.a → fltk/zlib/lib/libz.a
 8. Copy fltk/zlib/*.h → fltk/zlib/include
 
-9. For hpdf: `./configure –host=x86_64-w64-mingw32 --with-zlib="/.../fltk/zlib" –without-png`
+9. For hpdf: `./buildconf.sh`
+`./configure --host=x86_64-w64-mingw32 --with-zlib="/.../fltk/zlib" --without-png`
 10. `make`
 
 11. Finally, to build the executable DesignerFLagg.exe for MS Windows, do the following:
 12. ```x86_64-w64-mingw32-g++ -c `/.../fltk/fltk-config --cxxflags\` -I/.../hpdf/include *.cxx *.c agg2d/*.cpp```
-13. ```x86_64-w64-mingw32-g++ *.o -static -static-libgcc -static-libstdc++ `/.../fltk/fltk-config --ldflags` /.../hpdf/src/.libs/libhpdf.a -lfltk_z -s -no-pie -o DesignerFLagg.exe```
+13. ```x86_64-w64-mingw32-g++ *.o -static -static-libgcc -static-libstdc++ `/.../fltk/fltk-config --use-images --ldflags` /.../hpdf/src/.libs/libhpdf.a -s -no-pie -o DesignerFLagg.exe```
 14. `rm *.o`
 
 Note: remember to replace ... with the required path

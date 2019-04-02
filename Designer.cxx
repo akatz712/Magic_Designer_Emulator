@@ -293,6 +293,7 @@ int loadMGS(const char * filename) {
 	FILE *in;
 	int ret,count=0;
 	in = fl_fopen(filename, "r");
+	if (in == NULL) return 0;
 	fscanf(in,"{%d}\n",&backcolor); // is in 0BGR -> RGBFF
 	while(true) {
 		ret = fscanf(in,"{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}\n",
@@ -1641,19 +1642,23 @@ static void Timer_CB(void*) {              // resize timer callback
 
 int main(int argc, char **argv) {
 
+	int flag;
 	int XX, YY, HH, WW;
 	Fl::screen_work_area(XX,YY,WW,HH);
-	if (argc > 2) {
-		width = atoi(argv[1]);
-		height = atoi(argv[2]);
+	if (argc > 3) {
+		width = atoi(argv[2]);
+		height = atoi(argv[3]);
 	} else {
 		width = WW-310-10;
 		height = HH-24; //Fl_Window::decorated_h();
 	}
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
-	icon_img = new Fl_PNG_Image("icon.png"); // load icon
-
+#ifdef linux
+	icon_img = new Fl_PNG_Image("/usr/share/pixmaps/mdesigner.png"); // load icon
+#else
+	icon_img = new Fl_PNG_Image("mdesigner.png"); // load icon
+#endif
 	// allocate stuff
 	stack = new Segment[MAX]; /* stack of filled segments */
 	sp = stack;
@@ -1965,6 +1970,12 @@ int main(int argc, char **argv) {
 
 	message->clear_visible_focus();
 
+	if (argc > 1) {
+		flag = loadMGS(argv[1]);
+		agg_refresh();
+		if (flag>0) { sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(argv[1])); message->value(s); }
+		win->redraw();
+	}
 	showT();
 	set_controls();
 	buttons->end();

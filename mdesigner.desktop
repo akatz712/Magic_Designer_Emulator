@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Magic Designer Emulator
+Comment=Extended emulation of metalic gear based toy, creates curved line designs.
+Icon=mdesigner
+TryExec=mdesigner
+Exec=mdesigner %F
+Categories=Graphics;Education;
+MimeType=application/mdesigner;

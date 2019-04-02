@@ -1,4 +1,4 @@
-g++ -c `fltk-config --cxxflags` -Wno-narrowing *.cxx *.c agg2d/*.cpp
+g++ -c `fltk-config --cxxflags` *.cxx *.c agg2d/*.cpp
 g++  *.o `fltk-config --use-images --ldflags` -static -static-libgcc -static-libstdc++ -lhpdf -lz -s -no-pie -o DesignerFLagg
 rm *.o
 

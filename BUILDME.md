@@ -1,20 +1,16 @@
 To build the executable DesignerFlagg for Linux, simply `./compile_linux`
-Alternatively, You can run these commands if you have autotools installed :
-```
-aclocal
-autoconf
-automake --add-missing
-./configure
-make
-```
 
-For Linux, there are two dependencies, FLTK and libharu. I have built this program with the following distributions, requiring that these packages were installed prior:
+The correct way is to have GNU autotools installed and run script ./script1.sh to create a standard Linux distribution in the form of a compressed archive. Then extract that archive elsewhere, go to it, and run script ./script2.sh to make and install the program.
+
+For Linux, there are two dependencies, FLTK and libharu. These must be installed prior to building and using the program. The names for these packages in these Liunx distributions:
 
 - **Fedora 29**			yum: gcc-c++, fltk, fltk-devel, libharu-devel
 - **Lubuntu 18.10**		apt: libfltk1.3-dev, libhpdf-dev
 - **Void base 32 bit**			base-devel, fltk-devel,	Haru-devel
 - **Antergos base (Arch)**		fltk, libharu
 - **Linux Mint 19.1 Mate**		build-essential, libfltk1.3-dev, libhpdf-dev
+- **OpenSUSE Leap 15** 	gcc-c++, fltk-devel, libharu-devel
+- **Debian stretch 9.3.0** 	build-essential, libfltk1.3-dev, libhpdf-dev
 
 For MS Windows, I static linked everything to produce one exe file for portable distribution. The following steps:
 

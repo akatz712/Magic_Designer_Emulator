@@ -4,5 +4,6 @@
     <comment>Magic Designer Suite</comment>
     <glob pattern="*.MGS"/>
     <glob pattern="*.mgs"/>
+    <icon name="/usr/share/pixmaps/mdesigner.png"/>
   </mime-type>
 </mime-info>

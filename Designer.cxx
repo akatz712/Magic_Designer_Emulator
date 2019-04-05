@@ -1612,8 +1612,8 @@ class MyWindow : public Fl_Window { // public Fl_Double_Window {
 
 void startwin() {
 	Fl::visual(FL_RGB);
-	image_array = new unsigned char[width*height*DEPTH];  // image buffer
-	image_double = new unsigned char[width*height*DEPTH];
+	image_array = new unsigned char[width*(height+1)*DEPTH];  // image buffer
+	image_double = new unsigned char[width*(height+1)*DEPTH];
 	pixels = (Pixel *)image_double;
 	agg_attach(image_array, width, height, width * DEPTH);
 	if (jagg) agg_setantialias(0.01);
@@ -1654,7 +1654,7 @@ int main(int argc, char **argv) {
 	}
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
-#ifdef linux
+#ifndef win32
 	icon_img = new Fl_PNG_Image("/usr/share/pixmaps/mdesigner.png"); // load icon
 #else
 	icon_img = new Fl_PNG_Image("mdesigner.png"); // load icon

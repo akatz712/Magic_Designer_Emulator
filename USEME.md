@@ -28,17 +28,17 @@ The program comes with two windows and no conventional menu. The computer screen
 
 **Bwarp and Ewarp** involve changing the location and the size and the vertical and horizontal orientation of the rectangle or square which matches the ellipse or circle which emulates the circular paper of the original toy. By convention, the B point is on the lower left of the screen and the E point is the diagonally opposite from B. The mouse is used to click or drag the corresponding B or E points. It is called warp, since rectangles mean one dimension is compressed.
 
-**B** can have one of 4 orientations which represents the design paper being flipped over either vertically or horizontally. It is like a mirror effect. There is a button which cycles through each corner. The design shape does not change, but the morphing using such designs may change. 
+**B** can have one of 4 orientations which represents the design paper being flipped over either vertically or horizontally. It is like a mirror effect. There is a button which cycles through each corner. The design shape does not change, but the morphing using such designs may change.
 
 The **circle** button makes the radii the same size, removing the warp effect.
 
 **Rotate** allows you to control the orientation of the design frame relative to the screen, emulating the circular paper being tossed onto a table at any angle. You can also drag the mouse in a circular motion and spin the design.
 
-The above modes also use the **U D L R** buttons to fine tune the exact positioning or size. 
+The above modes also use the **U D L R** buttons to fine tune the exact positioning or size.
 
 The coordinates of the center, the size of the radii, and orientation angle in 1/10 of a degree, for the tentative design, are shown.
 
-**Select** mode allows the clicking of the mouse to select the closest design. The selected design is copied to the tentative design by giving it all of its parameters. 
+**Select** mode allows the clicking of the mouse to select the closest design. The selected design is copied to the tentative design by giving it all of its parameters.
 
 Reasons for a selecting a design are:
 - as a base for a subsequent morph
@@ -52,13 +52,13 @@ The **Morphing number** is used by ADD to tell it to make a morph design series.
 
 Numeric controls have 4 buttons up or down by 1 and up or down by 50.
 
-**Add** will add one design if there is no designs in the suite or if there is no selected design as a base. Otherwise, it uses the morph number to decide how many designs to add to the suite. 
+**Add** will add one design if there is no designs in the suite or if there is no selected design as a base. Otherwise, it uses the morph number to decide how many designs to add to the suite.
 
 **Delete** uses the morph number to delete that many designs from the suite. If morph is too high, then it deletes the whole suite. Delete is most useful to undo an unintended morph. To do a start over, delete the entire suite.
 
 **It is very important to realize that Add and Delete add to and take from the end of the suite which are the most recently added or loaded designs.**
 
-**Load and Save** adds and saves designs from and to files with the MGS extension. These files have one line for each design. Note that morphed intermediates count as individual designs in the suite. The line format is {n,n, … , n,n} with 26 integers containing parameters for the design. Paint and jagged mode and the size of the drawing screen are not saved. 
+**Load and Save** adds and saves designs from and to files with the MGS extension. These files have one line for each design. Note that morphed intermediates count as individual designs in the suite. The line format is {n,n, … , n,n} with 26 integers containing parameters for the design. Paint and jagged mode and the size of the drawing screen are not saved.
 
 Save optionally allows one to save a slice from the selected design and morph number is the number to save. If morph is too high, then to the end of the suite.
 
@@ -69,9 +69,10 @@ How to delete the beginning or middle of the suite:
 4. change the morph number to go back to the start of what you want to delete
 5. delete
 6. load the saved slice
+
 Example: 10 designs, delete 3 thru 6, leaving 1,2,7,8,9,10. Select 7, set morph to 4, save slice 7-10, set morph to 8, delete, load slice.
 
-Editing a design involves setting parameters and positioning the tentative design. And while you can edit any design in the suite, you are only editing a copy. 
+Editing a design involves setting parameters and positioning the tentative design. And while you can edit any design in the suite, you are only editing a copy.
 
 To edit/replace an actual selected design, do the following steps:
 1. if there are any designs past the one you wish to replace - select the next design
@@ -83,19 +84,22 @@ To edit/replace an actual selected design, do the following steps:
 7. edit it
 8. add the design
 9. load the saved slice
+
 Example, 10 designs and you want to change design 5: select 6, morph 5, Save slice 6-10, Select 5, morph 6, delete, edit it, add, load slice.
 
 **PDF** saves a .pdf file of the screen and its design suite, which can be viewed by any PDF viewer program. Paint and jagged mode is not saved. The size of the drawing screen is saved.
 
 **Bloom** is a movie of the design suite showing it being built.
+
 **Slow** is a movie of a slow motion drawing of the single tentative design. The mouse can be used to pause or kill these movies.
 
 **Arms, shift lever, Line width, and color** are self explanatory if you understand the actual toy.
 
-**T** is the total number of designs. 0 means no designs in the suite. 
+**T** is the total number of designs. 0 means no designs in the suite.
+
 **S** is the index of the selected design. 0 means no design is selected.
 
-The **picture button** changes the placement of arms according to the design toy. The numerical parameters below that are adjusted accordingly. If you change these parameters, and desire to restore them to normal, cycle through this button. In some placements, the shift lever has no effect on the design. Explaining the details of these parameters, please read the documentation at (http://www.akatz712.com/Physical_parameters.htm) 
+The **picture button** changes the placement of arms according to the design toy. The numerical parameters below that are adjusted accordingly. If you change these parameters, and desire to restore them to normal, cycle through this button. In some placements, the shift lever has no effect on the design. Explaining the details of these parameters, please read the documentation at (http://www.akatz712.com/Physical_parameters.htm)
 
 The concept of **sidedness** of a design is determined by the 3 numbers 6,1,1. You can really have fun with these gear size ratios. I like 13,2,1. The number of rotations needed to do a closed design is calculated based on these numbers up to 99. The physical toy always makes 6 sided designs.
 
@@ -115,7 +119,7 @@ The concept of **sidedness** of a design is determined by the 3 numbers 6,1,1. Y
 
 ## Morphing notes:
 
-Differences with parameters based on small numbers or options cannot be used as a morph. Examples are prime, line width, and sidedness. 
+Differences with parameters based on small numbers or options cannot be used as a morph. Examples are prime, line width, and sidedness.
 
 ## Future enhancement:
 
@@ -125,7 +129,7 @@ Other forms of color morphing is an area of possible specification not currently
 
 ## Other types of curves:
 
-This program can be generalized to emulate other types of curve drawing. For example, something called isotope which was done in Flash language. 
+This program can be generalized to emulate other types of curve drawing. For example, something called isotope which was done in Flash language.
 Download: isotope3.swf from (www.isotope3.net/isotope3.swf)
 Download and extract ```flash_player_sa_linux.x86_64.tar.gz``` from (https://www.adobe.com/support/flashplayer/debug_downloads.html)
 Linux : Download the Flash Player Projector (64-bit)

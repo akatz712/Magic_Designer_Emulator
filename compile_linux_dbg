@@ -1,2 +1,2 @@
 g++ -c `fltk-config --cxxflags` -g *.cxx *.c agg2d/*.cpp
-g++  *.o `fltk-config --use-images --ldflags` -g -lhpdf -no-pie -o DesignerFLagg
+g++  *.o `fltk-config --use-images --ldflags` -g -lhpdf -no-pie -o mdesigner

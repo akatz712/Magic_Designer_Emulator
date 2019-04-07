@@ -16,6 +16,7 @@
 #include <FL/Fl_Check_Button.H>
 #include <FL/fl_ask.H>
 #include <FL/Fl_PNG_Image.H>
+#include <FL/Fl_Help_Dialog.H>
 
 #define DEPTH 4
 
@@ -152,7 +153,7 @@ Fl_Check_Button *bClip,*bShape,*bFine,*bPrime;
 Fl_Counter *cLPeg, *cRPeg, *cLArm, *cRArm, *cLGearA, *cRGearA, *cLPegA, *cRPegA, *cArmAdjust;
 Fl_Simple_Counter *cCenter, *cLGear, *cRGear;
 Fl_Pixmap *armp[6], *PDFimage;
-
+Fl_Help_Dialog *help;
 Fl_PNG_Image *icon_img;
 
 static int l,t,r,b;
@@ -852,10 +853,12 @@ void Load_CB(Fl_Widget*, void *) {
 		break;  // CANCEL
 		default:
 		flag = loadMGS(fnfc.filename());
-		agg_refresh(); // now provides feedback.
-		if (flag>0) { sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(fnfc.filename())); message->value(s); }
-		win->redraw();
-		showT();
+		if (flag>0) {
+			agg_refresh(); // now provides feedback.
+			sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(fnfc.filename())); message->value(s);
+			win->redraw();
+			showT();
+		}
 		break;  // FILE CHOSEN
 	}
 }
@@ -1410,6 +1413,18 @@ void quit_cb(Fl_Widget*, void*) {
 	exit(0);
 }
 
+void help_cb(Fl_Widget*, void*) {
+	help->show();
+}
+
+int HelpKey(int e) {
+	if (e==FL_SHORTCUT && Fl::event_key()==FL_F+1) { //F1 key
+		help->show();
+		return(1);  //handled
+	}
+	return(0);
+}
+
 Fl_Menu_Item rclick_menu[] = {
 	{ "Add to Design Suite",   0, Add_CB,  (void*)0 },
 	{ "Load Design Suite",   0, Load_CB,  (void*)0 },
@@ -1418,6 +1433,7 @@ Fl_Menu_Item rclick_menu[] = {
 	{ "Delete/Undo Designs", 0, Delete_CB, (void*)0 },
 	{ "Start Bloom Show", 0, Bloom_CB,  (void*)0 },
 	{ "Start Slow Draw", 0, Slow_CB,  (void*)0 },
+	{ "HELP with program",   0, help_cb,  (void*)0 },
 	{ "Done with program",   0, quit_cb,  (void*)0 },
 	{ 0 }
 };
@@ -1642,22 +1658,30 @@ static void Timer_CB(void*) {              // resize timer callback
 
 int main(int argc, char **argv) {
 
+	if (argc == 2 && argv[1][0] == '-') { printf("Usage: mdesigner [ [path/]file | - [ width_int height_int ] ]\n"); exit(0); }
 	int flag;
 	int XX, YY, HH, WW;
 	Fl::screen_work_area(XX,YY,WW,HH);
 	if (argc > 3) {
 		width = atoi(argv[2]);
 		height = atoi(argv[3]);
+		if (width < 100 || height < 100) {
+			width = WW-310-10;
+			height = HH-24;
+		}
 	} else {
 		width = WW-310-10;
 		height = HH-24; //Fl_Window::decorated_h();
 	}
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
+	help = new Fl_Help_Dialog;
 #ifndef win32
 	icon_img = new Fl_PNG_Image("/usr/share/pixmaps/mdesigner.png"); // load icon
+    help->load("/usr/share/doc/mdesigner/USEME.html");
 #else
 	icon_img = new Fl_PNG_Image("mdesigner.png"); // load icon
+    help->load("USEME.html");
 #endif
 	// allocate stuff
 	stack = new Segment[MAX]; /* stack of filled segments */
@@ -1970,12 +1994,16 @@ int main(int argc, char **argv) {
 
 	message->clear_visible_focus();
 
-	if (argc > 1) {
-		flag = loadMGS(argv[1]);
+	Fl::add_handler(HelpKey);
+
+	flag = 0;
+	if (argc > 1 && argv[1][0] != '-') flag = loadMGS(argv[1]);
+	if (flag>0) {
 		agg_refresh();
-		if (flag>0) { sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(argv[1])); message->value(s); }
+		sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(argv[1])); message->value(s);
 		win->redraw();
 	}
+	else message->value("Press F1 key for HELP!");
 	showT();
 	set_controls();
 	buttons->end();

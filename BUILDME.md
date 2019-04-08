@@ -37,7 +37,7 @@ Note that it is possible to set up MinGW and Msys on a MS Windows system and do 
 10. `make`
 
 11. Finally, to build the executable DesignerFLagg.exe for MS Windows, do the following:
-12. ```x86_64-w64-mingw32-g++ -c `/.../fltk/fltk-config --cxxflags\` -I/.../hpdf/include *.cxx *.c agg2d/*.cpp```
+12. ```x86_64-w64-mingw32-g++ -c -Dwin32=1 `/.../fltk/fltk-config --cxxflags\` -I/.../hpdf/include *.cxx *.c agg2d/*.cpp```
 13. ```x86_64-w64-mingw32-g++ *.o -static -static-libgcc -static-libstdc++ `/.../fltk/fltk-config --use-images --ldflags` /.../hpdf/src/.libs/libhpdf.a -s -no-pie -o DesignerFLagg.exe```
 14. `rm *.o`
 

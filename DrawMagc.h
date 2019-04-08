@@ -6,24 +6,20 @@
 #define DG_RD(ANGLE_x) (double)(ANGLE_x*3.14159265/180.)
 #define RD_DG(RADIAN_x) (double)(RADIAN_x*180./3.14159265)
 
-#ifdef WIN32
-#include <windows.h>
-#else
-typedef struct tagRECT // from MS Windows
+typedef struct tagRECT_fromWindows
 {
   int left;
   int top;
   int right;
   int bottom;
-} RECT;
-#endif
+} RECT_fromWindows;
 
 // integer version of the structure. Since all sizes are relative to center_radius, this should be practical.
 // for angles, use 1/10 of a degree.
 
 typedef struct magic
 {
-	RECT magic_area; // where it is drawn is important info - these are in pixels
+	RECT_fromWindows magic_area; // where it is drawn is important info - these are in pixels
 	int center_radius;  // the drawing area
 	int gearL_radius;
 	int gearR_radius;              // small gears radius sizes

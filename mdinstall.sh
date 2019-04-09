@@ -15,8 +15,9 @@ then
     echo "Haru/hpdf development package is not installed." 
     exit 3
 fi
-./configure --prefix=/usr
-make
-make install
-update-desktop-database
+./configure --prefix=/usr  || exit 4
+make  || exit 5
+make install-strip  || exit 6
 update-mime-database /usr/share/mime
+update-desktop-database --quiet
+echo "Magic Designer Emulator installed successfully."

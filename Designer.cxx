@@ -1289,6 +1289,7 @@ void Jagg_cb(Fl_Widget *w, void*) {
 }
 
 void Suite_cb(Fl_Widget *w, void*) {
+	if (Mode == 6) message->value("Suite remains visible in paint mode.");
 	suite = (((Fl_Check_Button *)w)->value());
 	agg_this();
 	win->redraw();

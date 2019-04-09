@@ -1,6 +1,17 @@
-To build the executable DesignerFlagg for Linux, simply `./compile_linux`
+To build Linux:
+I run the script using GNU autotools ./mdprepare.sh which builds a dstribution file mdesigner-v1.v2.tar.gz with v1 and v2 being version and subversion.
+```
+aclocal
+autoconf
+automake --add-missing
+./configure --prefix=/usr
+make distcheck
+```
+I upload the distribution file to Sourceforge.
 
-The correct way is to have GNU autotools installed and run script ./script1.sh to create a standard Linux distribution in the form of a compressed archive. Then extract that archive elsewhere, go to it, and run script ./script2.sh to make and install the program.
+You download from https://sourceforge.net/projects/complexshapes/files/mdesigner-v1.v2.tar.gz/download ,and then extract it, and go to the folder in a terminal, and run the script ./mdinstall.sh as superuser.
+
+Run ./mdremove.sh as superuser to remove the program.
 
 For Linux, there are two dependencies, FLTK and libharu. These must be installed prior to building and using the program. The names for these packages in these Liunx distributions:
 

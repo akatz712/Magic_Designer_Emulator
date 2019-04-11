@@ -1,4 +1,8 @@
 # Magic_Designer_Emulator
+If you are reading this on SourceForge, download and install for Windows with file : MagicDesignersetup.exe
+
+Or download and extract and run ./mdinstall.sh as superuser for Linux with file : mdesigner-1.0.tar.gz
+
 This computer program is an exact emulation of a toy which was sold years ago called Magic Designer . It also once had the name Hoot Nanny. It is made out of metal and comes with circular paper and colored pens.
 
 Fun artistic tool set for producing mathematically inspired designs.

@@ -54,7 +54,16 @@ Note that it is possible to set up MinGW and Msys on a MS Windows system and do 
 
 Note: remember to replace ... with the required path
 
+15. Used innosetup-qsp-5.6.1.exe from http://www.jrsoftware.org/isdl.php to edit and compile a script to do a Windows install.
+16. Additionally, I needed a Windows icon. I am using the png icon from the Android app inside of the program. In fact, where that is found
+is the only difference between the source code for Windows versus Linux. Anyway, I used https://icoconvert.com/ to make a Windows icon from the png.
+17. The other Windows issue is how to mime the icon and how to click on an MGS file and it runs the program. This is done by changing
+the Registry, which is specified in the Inno setup script.
+How to do that I found from https://docs.microsoft.com/en-us/windows/desktop/shell/fa-sample-scenarios
+18. The Inno compiler makes one exe file containing all of the necessary files needed at runtime plus commands to run an install and
+set up an uninstall script.
+19. I uploaded MagicDesignersetup.exe to https://sourceforge.net/projects/complexshapes/files/MagicDesignersetup.exe/download
+20. Finally, when downloading that file and running it in Windows, you need to bypass the warnings.
 
-
-
+The above is for a 64 bit Windows program. If there is a need for a 32 bit one, I will provide that on request.
 

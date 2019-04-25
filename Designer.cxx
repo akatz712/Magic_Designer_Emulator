@@ -1628,7 +1628,6 @@ class MyWindow : public Fl_Window { // public Fl_Double_Window {
 };
 
 void startwin() {
-	Fl::visual(FL_RGB);
 	image_array = new unsigned char[width*(height+1)*DEPTH];  // image buffer
 	image_double = new unsigned char[width*(height+1)*DEPTH];
 	pixels = (Pixel *)image_double;
@@ -1636,13 +1635,6 @@ void startwin() {
 	if (jagg) agg_setantialias(0.01);
 	else agg_setantialias(1.0);
 	agg_refresh();
-	win = new MyWindow(left,top,width,height,"");
-	setwindowtitle(0);
-	win->resizable(win);
-	win->callback(quit_cb,(void *)0);
-	inresize = false;
-	win->icon(icon_img);
-	win->show();
 }
 
 static void Timer_CB(void*) {              // resize timer callback
@@ -1651,8 +1643,9 @@ static void Timer_CB(void*) {              // resize timer callback
 	height = futureheight;
 	delete [] image_array;
 	delete [] image_double;
-	delete win;
 	startwin();
+	inresize = false;
+	win->redraw();
 }
 
 /************************************************************************/
@@ -1702,7 +1695,16 @@ int main(int argc, char **argv) {
 	selected = -1; // means no designs
 	backcolor = -1; // White
 	default_shape();
+
+	Fl::visual(FL_RGB);
 	startwin();
+	win = new MyWindow(left,top,width,height,"");
+	setwindowtitle(0);
+	win->resizable(win);
+	win->callback(quit_cb,(void *)0);
+	inresize = false;
+	win->icon(icon_img);
+	win->show();
 
 	const char *armlabel[18] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"};
 	const char *widthlabel[4] = {"1","2","3","4"};

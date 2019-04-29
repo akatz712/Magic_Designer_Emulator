@@ -1,3 +1,7 @@
-g++ -c `fltk-config --cxxflags` *.cxx *.c agg2d/*.cpp
+g++ -c `fltk-config --cxxflags` AggMagic.cxx BezierSpline.c agg2d/*.cpp
+g++ -c `fltk-config --cxxflags` -DMGS=1 Designer.cxx DrawMagc.c Circle_Intersection.c
 g++  *.o `fltk-config --use-images --ldflags` -lhpdf -s -no-pie -o mdesigner
+rm Designer.o DrawMagc.o Circle_Intersection.o
+g++ -c `fltk-config --cxxflags` -DCCSG=1 Designer.cxx CCSGDrawMagc.c
+g++  *.o `fltk-config --use-images --ldflags` -lhpdf -s -no-pie -o ccsgdesigner
 rm *.o

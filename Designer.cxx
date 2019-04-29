@@ -5,32 +5,45 @@
 #include <FL/Fl_Menu.H>
 #include <FL/Fl_Radio_Round_Button.H>
 #include <FL/Fl_Repeat_Button.H>
-#include <FL/Fl_Simple_Counter.H>
 #include <FL/Fl_Output.H>
 #include <FL/Fl_Counter.H>
 #include <FL/Fl_Color_Chooser.H>
 #include <FL/fl_draw.H>
 #include <FL/Fl_Native_File_Chooser.H>
 
-#include <FL/Fl_Slider.H>
 #include <FL/Fl_Check_Button.H>
 #include <FL/fl_ask.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Help_Dialog.H>
 
-#define DEPTH 4
-
+#ifdef MGS
+#include <FL/Fl_Simple_Counter.H>
+#include <FL/Fl_Slider.H>
 #include "DrawMagc.h"
+#endif
+
+#ifdef CCSG
+#include "CCSGDrawMagc.h"
+#endif
 
 extern int draw_magic(magic *, DIV *);
 
+#ifdef MGS
 #include "armsplace1.xpm"
 #include "armsplace2.xpm"
 #include "armsplace3.xpm"
 #include "armsplace4.xpm"
 #include "armsplace5.xpm"
 #include "armsplace6.xpm"
+#endif
+
 #include "pdfx.xpm"
+#include "loadx.xpm"
+#include "savex.xpm"
+#include "addx.xpm"
+#include "deletex.xpm"
+#include "slowx.xpm"
+#include "bloomx.xpm"
 
 // stuff for PDF output ----------------------------------------
 #include <setjmp.h>
@@ -69,7 +82,124 @@ static int hpdf_init() {
 	HPDF_SetCompressionMode (pdf, HPDF_COMP_ALL);
 	return 0;
 }
+
 //----------------------------------------------------------------------------
+// https://www.programmingalgorithms.com/algorithm/hsv-to-rgb?lang=C
+// https://www.programmingalgorithms.com/algorithm/rgb-to-hsv?lang=C
+
+static double Min(double a, double b) {
+	return a <= b ? a : b;
+}
+
+static double Max(double a, double b) {
+	return a >= b ? a : b;
+}
+
+void RGB_to_HSV(unsigned int RGB, double *HH, double *SS, double *VV) {
+
+	double R,G,B;
+
+	R = (double)(RGB&0xFF);
+	G = (double)((RGB>>8)&0xFF);
+	B = (double)((RGB>>16)&0xFF);
+
+	double delta, min;
+	double h = 0., s, v;
+
+	min = Min(Min( R,  G),  B);
+	v = Max(Max( R,  G),  B);
+	delta = v - min;
+
+	if (v == 0.0)
+		s = 0.;
+	else
+		s = delta / v;
+
+	if (s == 0.)
+		h = 0.0;
+
+	else
+	{
+		if ( R == v) h = (G - B) / delta;
+		else if (G == v) h = 2. + (B - R) / delta;
+		else if (B == v) h = 4. + (R - G) / delta;
+
+		h *= 60.;
+
+		if (h < 0.0) h += 360.;
+	}
+
+*HH = h; *SS = s; *VV = v/255.;
+}
+
+unsigned int HSV_to_RGB(double H, double S, double V) {
+
+	double r = 0., g = 0., b = 0.;
+
+	if (S == 0.)
+	{
+		r = V;
+		g = V;
+		b = V;
+	}
+	else
+	{
+		int i;
+		double f, p, q, t;
+
+		if (H == 360.) H = 0.;
+		else H /= 60.;
+
+		i = (int)(H); // H assumed positive and casting int removes fraction
+		f = H - i;
+
+		p = V * (1.0 - S);
+		q = V * (1.0 - (S * f));
+		t = V * (1.0 - (S * (1.0 - f)));
+
+		switch (i)
+		{
+		case 0:
+			r = V;
+			g = t;
+			b = p;
+			break;
+
+		case 1:
+			r = q;
+			g = V;
+			b = p;
+			break;
+
+		case 2:
+			r = p;
+			g = V;
+			b = t;
+			break;
+
+		case 3:
+			r = p;
+			g = q;
+			b = V;
+			break;
+
+		case 4:
+			r = t;
+			g = p;
+			b = V;
+			break;
+
+		default:
+			r = V;
+			g = p;
+			b = q;
+			break;
+		}
+
+	}
+
+	return ((int)(r*255)&0xFF) | (((int)(g*255)&0xFF)<<8) | (((int)(b*255)&0xFF)<<16);
+}
 
 //---------------------------------------------------------------------------
 /*
@@ -118,6 +248,8 @@ bool bloom_mode = false;
 int bloom_idx = 0;
 bool slow_mode = false;
 int slow_idx = 0;
+float slow_interval = 0.2;
+bool HSVmorph = false;
 
 #define current 7999
 DIV *DIV_buffer_ptr;
@@ -126,35 +258,51 @@ DIV **beziers;
 int *segs;
 int *lcolor;
 int *lwidth;
+
+#ifdef MGS
 int *Larm;
 int *Rarm;
 int *Shift;
 int *Armsplacement;
+#endif
+
 int designsCount;
 int selected;
 int backcolor;
 
+#define DEPTH 4
 unsigned char *image_array;   // image buffer
 unsigned char *image_double;
 Pixel *pixels;
 
 Fl_Window *win, *buttons;
 Fl_Button *bCorner;
-Fl_Output *centerXtext,*centerYtext,*radiusXtext,*radiusYtext,*angleRtext, *traces, *selectedt, *rots, *shiftlever_e, *message;
+Fl_Output *centerXtext,*centerYtext,*radiusXtext,*radiusYtext,*angleRtext, *traces, *selectedt, *groupt, *message;
 Fl_Counter *cmorph;
 Fl_Native_File_Chooser fnfc;
+Fl_Radio_Round_Button *Widthb[4];
+Fl_Button *bColor;
+Fl_Check_Button *bShape,*bFine,*bClip;
+Fl_Pixmap *PDFimage, *LOADimage,*SAVEimage,*ADDimage,*DELETEimage,*SLOWimage,*BLOOMimage;
+Fl_Help_Dialog *help;
+Fl_PNG_Image *icon_img;
+
+#ifdef MGS
+Fl_Output *rots, *shiftlever_e;
 Fl_Radio_Round_Button *Larmb[18];
 Fl_Radio_Round_Button *Rarmb[18];
 Fl_Button *armsplacementb;
 Fl_Slider *shiftlever;
-Fl_Radio_Round_Button *Widthb[4];
-Fl_Button *bColor;
-Fl_Check_Button *bClip,*bShape,*bFine,*bPrime;
+Fl_Check_Button *bPrime;
 Fl_Counter *cLPeg, *cRPeg, *cLArm, *cRArm, *cLGearA, *cRGearA, *cLPegA, *cRPegA, *cArmAdjust;
 Fl_Simple_Counter *cCenter, *cLGear, *cRGear;
-Fl_Pixmap *armp[6], *PDFimage;
-Fl_Help_Dialog *help;
-Fl_PNG_Image *icon_img;
+Fl_Pixmap *armp[6];
+#endif
+
+#ifdef CCSG
+Fl_Counter *ccircles[8],*clengths[8],*cangles[8];
+Fl_Output *divt;
+#endif
 
 static int l,t,r,b;
 static float radiusX, radiusY, centerX, centerY;
@@ -217,7 +365,7 @@ bool agg_slow() {
 }
 
 /************************************************************************/
-
+#ifdef MGS
 	const int Advanced_default_all[6][12] = {{6000,500,1000,0,750,10500,10500,2350,1800,0,1350,1},
 		{6000,500,1000,0,750,10500,10500,3150,1800,0,1350,1},
 		{6000,500,500,0,0,10500,10500,0,1800,0,0,1},
@@ -266,12 +414,18 @@ void processMGSmagic(magic * magic_ptr) {
 	magic_ptr->clipradius = MGSmagic[21];
 	magic_ptr->numpoints = MGSmagic[25];
 }
+#endif
 
+#ifdef MGS
 void add_design (int index, int larm, int rarm, int shift, int armp, int c, int w, magic* mg) {
 	Larm[index] = larm;
 	Rarm[index] = rarm;
 	Shift[index] = shift;
 	Armsplacement[index] = armp;
+#endif
+#ifdef CCSG
+void add_design (int index, int c, int w, magic* mg) {
+#endif
 	lcolor[index] = c;
 	lwidth[index] = w;
 	magics[index] = mg;
@@ -284,13 +438,18 @@ void update_design () {
 	int prev_segs = segs[current];
 	free(beziers[current]);
 	segs[current] = draw_magic(magics[current], DIV_buffer_ptr);
+#ifdef CCSG
+	sprintf(s,"%d",(segs[current]/4-1)/120);
+	divt->value(s);
+#endif
 	beziers[current] = (DIV *)malloc(sizeof(DIV)*segs[current]+8);
 	memcpy(beziers[current],DIV_buffer_ptr,sizeof(DIV)*segs[current]+8);
 	if (segs[current] == 0 && prev_segs > 0) message->value("The current design cannot be drawn.");
 	if (segs[current] > 0 && prev_segs == 0) message->value("");
 }
 
-int loadMGS(const char * filename) {
+#ifdef MGS
+int loadfile(const char * filename) {
 	FILE *in;
 	int ret,count=0;
 	in = fl_fopen(filename, "r");
@@ -309,6 +468,40 @@ int loadMGS(const char * filename) {
 	}
 	fclose(in);
 	return count;
+}
+
+void default_shape() {
+	magic * magic_ptr = new magic;
+//	this.rect[0] = scrW/2.F - scrm/2.F; // =(mg->magic_area).left
+//	this.rect[1] = scrH/2.F + scrm/2.F; //  =(mg->magic_area).top
+//	this.rect[2] = scrW/2.F + scrm/2.F; //  =(mg->magic_area).right
+//	this.rect[3] = scrH/2.F - scrm/2.F; //  =(mg->magic_area).bottom
+	int m = width;
+	if (height < width) m = height;
+	int Larm = 67; //C
+	int Rarm = 67;
+	int shift = 60;
+	int armp = 4;
+	magic_ptr->magic_area.left = (width - m)/2;
+	magic_ptr->magic_area.top = (height + m)/2;
+	magic_ptr->magic_area.right = (width + m)/2;
+	magic_ptr->magic_area.bottom = (height - m)/2;
+	magic_ptr->center_radius = 6000;
+	magic_ptr->gearL_radius = 1000;
+	magic_ptr->gearR_radius = 1000;
+	magic_ptr->pegL_radius = 750;
+	magic_ptr->pegR_radius = 750;
+	magic_ptr->gearR_angle = 3150;
+	magic_ptr->pegL_angle = 450;
+	magic_ptr->pegR_angle = 1350;
+	magic_ptr->rotations = 1;
+	magic_ptr->armL_length = 7000 + (10 - (Larm-64)) * 500;
+	magic_ptr->armR_length = 7000 + (10 - (Rarm-64)) * 500;
+	magic_ptr->gearL_angle = 2950 - shift*10;
+	magic_ptr->prime = 6251;
+	magic_ptr->clipradius = 0;
+	magic_ptr->numpoints = 0;
+	add_design(current, Larm, Rarm, shift, armp, 0x00000060, 2, magic_ptr);
 }
 
 void saveShape(int x) { //6000,500,500,0,0,9500,8000,0,1800,0,0,1,10001,69,72,60,3, - circle to match shape
@@ -333,7 +526,7 @@ void saveShape(int x) { //6000,500,500,0,0,9500,8000,0,1800,0,0,1,10001,69,72,60
 	}
 }
 
-void saveMGS(const char * filename,int start, int end) {
+void savefile(const char * filename,int start, int end) {
 	FILE *out;
 	out = fl_fopen(filename, "w"); 
 	fprintf(out,"{%d}\n",backcolor&0x00FFFFFF);
@@ -367,9 +560,130 @@ void saveMGS(const char * filename,int start, int end) {
 				magics[i]->numpoints);
 	fclose(out);
 }
+#endif
+
+#ifdef CCSG
+int loadfile(const char * filename) {
+	int CCSGmagic[39];
+	FILE *in;
+	int ret,count=0;
+	in = fl_fopen(filename, "r");
+	if (in == NULL) return 0;
+	fscanf(in,"{%d}\n",&backcolor); // is in 0BGR -> RGBFF
+	while(true) {
+		ret = fscanf(in,"{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}\n",
+		&CCSGmagic[0],&CCSGmagic[1],&CCSGmagic[2],&CCSGmagic[3],&CCSGmagic[4],&CCSGmagic[5],&CCSGmagic[6],&CCSGmagic[7],&CCSGmagic[8],&CCSGmagic[9],
+		&CCSGmagic[10],&CCSGmagic[11],&CCSGmagic[12],&CCSGmagic[13],&CCSGmagic[14],&CCSGmagic[15],&CCSGmagic[16],&CCSGmagic[17],&CCSGmagic[18],&CCSGmagic[19],
+		&CCSGmagic[20],&CCSGmagic[21],&CCSGmagic[22],&CCSGmagic[23],&CCSGmagic[24],&CCSGmagic[25],&CCSGmagic[26],&CCSGmagic[27],&CCSGmagic[28],&CCSGmagic[29],
+		&CCSGmagic[30],&CCSGmagic[31],&CCSGmagic[32],&CCSGmagic[33],&CCSGmagic[34],&CCSGmagic[35],&CCSGmagic[36],&CCSGmagic[37],&CCSGmagic[38]);
+		if (ret == 38) CCSGmagic[38]=0; // some files missing coloroption;
+		if (ret < 38) break; // eof error or corrupt file
+		magic * mg = new magic;
+		mg->magic_area.left = CCSGmagic[0];
+		mg->magic_area.top = CCSGmagic[1];
+		mg->magic_area.right = CCSGmagic[2];
+		mg->magic_area.bottom = CCSGmagic[3];
+		mg->clipradius = CCSGmagic[4];
+		mg->numpoints = CCSGmagic[7];
+		for (int i=0; i<10; i++) {
+			mg->m_circles[i] = CCSGmagic[8+i];
+			mg->m_angles[i] = CCSGmagic[18+i];
+			mg->m_lengths[i] = CCSGmagic[28+i];
+		}
+		add_design(designsCount, CCSGmagic[5], CCSGmagic[6], mg);
+		designsCount++; count++;
+	}
+	fclose(in);
+	return count;
+}
+
+void default_shape_core(magic *magic_ptr) {
+	int m = width;
+	if (height < width) m = height;
+	magic_ptr->magic_area.left = (width - m)/2;
+	magic_ptr->magic_area.top = (height + m)/2;
+	magic_ptr->magic_area.right = (width + m)/2;
+	magic_ptr->magic_area.bottom = (height - m)/2;
+	magic_ptr->clipradius = 0;
+	magic_ptr->numpoints = 18000;
+	for (int i=0; i<10; i++) {
+		magic_ptr->m_circles[i] = 0;
+		magic_ptr->m_angles[i] = 0;
+		magic_ptr->m_lengths[i] = 0;
+	}
+	magic_ptr->m_circles[0] = 1;
+	magic_ptr->m_lengths[0] = 200;
+}
+
+void default_shape() {
+	magic * magic_ptr = new magic;
+	default_shape_core(magic_ptr);
+	add_design(current, 0x00000060, 2, magic_ptr);
+}
+
+void saveShape(int x) { // circle to match shape
+	if ((magics[x]->clipradius&0x2) == 0x2) {
+		magics[x]->numpoints = 18000;
+		for (int i=0; i<10; i++) {
+			magics[x]->m_circles[i] = 0;
+			magics[x]->m_angles[i] = 0;
+			magics[x]->m_lengths[i] = 0;
+		}
+		magics[x]->m_circles[0] = 1;
+		magics[x]->m_lengths[0] = 200;
+	}
+}
+
+void savefile(const char * filename,int start, int end) {
+	FILE *out;
+	out = fl_fopen(filename, "w"); 
+	fprintf(out,"{%d}\n",backcolor&0x00FFFFFF);
+	for (int i=start-1;i<end;i++)
+			fprintf(out,"{%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d}\n",
+				magics[i]->magic_area.left,
+				magics[i]->magic_area.top,
+				magics[i]->magic_area.right,
+				magics[i]->magic_area.bottom,
+				magics[i]->clipradius,
+				lcolor[i],
+				lwidth[i],
+				magics[i]->numpoints,
+				magics[i]->m_circles[0],
+				magics[i]->m_circles[1],
+				magics[i]->m_circles[2],
+				magics[i]->m_circles[3],
+				magics[i]->m_circles[4],
+				magics[i]->m_circles[5],
+				magics[i]->m_circles[6],
+				magics[i]->m_circles[7],
+				magics[i]->m_circles[8],
+				magics[i]->m_circles[9],
+				magics[i]->m_angles[0],
+				magics[i]->m_angles[1],
+				magics[i]->m_angles[2],
+				magics[i]->m_angles[3],
+				magics[i]->m_angles[4],
+				magics[i]->m_angles[5],
+				magics[i]->m_angles[6],
+				magics[i]->m_angles[7],
+				magics[i]->m_angles[8],
+				magics[i]->m_angles[9],
+				magics[i]->m_lengths[0],
+				magics[i]->m_lengths[1],
+				magics[i]->m_lengths[2],
+				magics[i]->m_lengths[3],
+				magics[i]->m_lengths[4],
+				magics[i]->m_lengths[5],
+				magics[i]->m_lengths[6],
+				magics[i]->m_lengths[7],
+				magics[i]->m_lengths[8],
+				magics[i]->m_lengths[9],
+				0 ); // coloroption
+	fclose(out);
+}
+#endif
 
 void savePDF(const char * filename) {
-
 	if (hpdf_init()) return; // sets compression
 	HPDF_Page page_1;
 	page_1 = HPDF_AddPage (pdf);
@@ -428,48 +742,16 @@ void savePDF(const char * filename) {
 	HPDF_Free (pdf);
 }
 
-void default_shape() {
-	magic * magic_ptr = new magic;
-//	this.rect[0] = scrW/2.F - scrm/2.F; // =(mg->magic_area).left
-//	this.rect[1] = scrH/2.F + scrm/2.F; //  =(mg->magic_area).top
-//	this.rect[2] = scrW/2.F + scrm/2.F; //  =(mg->magic_area).right
-//	this.rect[3] = scrH/2.F - scrm/2.F; //  =(mg->magic_area).bottom
-	int m = width;
-	if (height < width) m = height;
-	int Larm = 67; //C
-	int Rarm = 67;
-	int shift = 60;
-	int armp = 4;
-	magic_ptr->magic_area.left = (width - m)/2;
-	magic_ptr->magic_area.top = (height + m)/2;
-	magic_ptr->magic_area.right = (width + m)/2;
-	magic_ptr->magic_area.bottom = (height - m)/2;
-	magic_ptr->center_radius = 6000;
-	magic_ptr->gearL_radius = 1000;
-	magic_ptr->gearR_radius = 1000;
-	magic_ptr->pegL_radius = 750;
-	magic_ptr->pegR_radius = 750;
-	magic_ptr->gearR_angle = 3150;
-	magic_ptr->pegL_angle = 450;
-	magic_ptr->pegR_angle = 1350;
-	magic_ptr->rotations = 1;
-	magic_ptr->armL_length = 7000 + (10 - (Larm-64)) * 500;
-	magic_ptr->armR_length = 7000 + (10 - (Rarm-64)) * 500;
-	magic_ptr->gearL_angle = 2950 - shift*10;
-	magic_ptr->prime = 6251;
-	magic_ptr->clipradius = 0;
-	magic_ptr->numpoints = 0;
-	add_design(current, Larm, Rarm, shift, armp, 0x00000060, 2, magic_ptr);
-}
-
 void selectDesign() {
 	segs[current] = segs[selected];
 	lcolor[current] = lcolor[selected];
 	lwidth[current] = lwidth[selected];
+#ifdef MGS
 	Larm[current] = Larm[selected];
 	Rarm[current] = Rarm[selected];
 	Shift[current] = Shift[selected];
 	Armsplacement[current] = Armsplacement[selected];
+#endif
 	memcpy(magics[current],magics[selected],sizeof(magic));
 	free(beziers[current]);
 	beziers[current] = (DIV *)malloc(sizeof(DIV)*segs[selected]+8);
@@ -506,10 +788,12 @@ void copyDesign(int index) {
 	segs[index] = segs[current];
 	lcolor[index] = lcolor[current];
 	lwidth[index] = lwidth[current];
+#ifdef MGS
 	Larm[index] = Larm[current];
 	Rarm[index] = Rarm[current];
 	Shift[index] = Shift[current];
 	Armsplacement[index] = Armsplacement[current];
+#endif
 }
 
 bool anyChanges() {
@@ -520,29 +804,52 @@ bool anyChanges() {
 }
 
 int isMorphallowed() {
+#ifdef MGS
 	if (magics[selected]->center_radius != magics[current]->center_radius ||
 		magics[selected]->gearL_radius != magics[current]->gearL_radius ||
 		magics[selected]->gearR_radius != magics[current]->gearR_radius ||
 		magics[selected]->rotations != magics[current]->rotations) return 3; // cannot morph between different sidedness
 	if ((magics[selected]->prime&0x1) != (magics[current]->prime&0x1) ||
+#endif
+#ifdef CCSG
+	for (int i=0;i<10;i++) if (magics[selected]->m_circles[i] != magics[current]->m_circles[i]) return 3;
+	if (
+#endif
 		magics[selected]->clipradius != magics[current]->clipradius ||
-		(magics[selected]->numpoints>=54000) != (magics[current]->numpoints>=54000) ||
+		(magics[selected]->numpoints - magics[selected]->numpoints%3600) != (magics[current]->numpoints - magics[current]->numpoints%3600) ||
 		lwidth[selected] != lwidth[current]) return 4; // cannot morph on different discrete values
 	return 0;
 }
 
-static float deltared, deltagreen, deltablue, deltaarmadjust, deltaangleR;
+static float deltared, deltagreen, deltablue, deltaangleR;
+static double currH,currS,currV,selH,selS,selV;
+#ifdef MGS
+static float deltaarmadjust;
 static float delta12[12];
 static int deltaLarm, deltaRarm, deltaShift;
+#endif
+#ifdef CCSG
+static float delta12[4], deltalengths[10], deltaangles[10];
+#endif
 
 void makedeltas(int morph_num) {
+	if (HSVmorph) {
+	RGB_to_HSV(lcolor[current],&currH,&currS,&currV);
+	RGB_to_HSV(lcolor[selected],&selH,&selS,&selV);
+	deltared = (currH - selH)/morph_num;
+	deltagreen = (currS - selS)/morph_num;
+	deltablue = (currV - selV)/morph_num;
+	} else {
 	deltared = ((float)(lcolor[current]&0xFF) - (float)(lcolor[selected]&0xFF))/morph_num;
 	deltagreen = ((float)((lcolor[current]>>8)&0xFF) - (float)((lcolor[selected]>>8)&0xFF))/morph_num;
 	deltablue = ((float)((lcolor[current]>>16)&0xFF) - (float)((lcolor[selected]>>16)&0xFF))/morph_num;
+	}
 	delta12[0] = ((float)magics[current]->magic_area.left - (float)magics[selected]->magic_area.left)/morph_num;
 	delta12[1] = ((float)magics[current]->magic_area.top - (float)magics[selected]->magic_area.top)/morph_num;
 	delta12[2] = ((float)magics[current]->magic_area.right - (float)magics[selected]->magic_area.right)/morph_num;
 	delta12[3] = ((float)magics[current]->magic_area.bottom - (float)magics[selected]->magic_area.bottom)/morph_num;
+	deltaangleR = ((float)(magics[current]->numpoints%3600) - (float)(magics[selected]->numpoints%3600))/morph_num;
+#ifdef MGS
 	delta12[4] = ((float)magics[current]->pegL_radius - (float)magics[selected]->pegL_radius)/morph_num;
 	delta12[5] = ((float)magics[current]->pegR_radius - (float)magics[selected]->pegR_radius)/morph_num;
 	delta12[6] = ((float)magics[current]->armL_length - (float)magics[selected]->armL_length)/morph_num;
@@ -551,21 +858,36 @@ void makedeltas(int morph_num) {
 	delta12[9] = ((float)magics[current]->gearL_angle - (float)magics[selected]->gearL_angle)/morph_num;
 	delta12[10] = ((float)magics[current]->pegL_angle - (float)magics[selected]->pegL_angle)/morph_num;
 	delta12[11] = ((float)magics[current]->pegR_angle - (float)magics[selected]->pegR_angle)/morph_num;
-	deltaarmadjust = ((float)(magics[current]->prime/10) - (float)(magics[selected]->prime/10))/morph_num;
-	deltaangleR = ((float)(magics[current]->numpoints%3600) - (float)(magics[selected]->numpoints%3600))/morph_num;
 	if (Larm[current] == Larm[selected]) deltaLarm = Larm[selected]; else deltaLarm = 90; // Z
 	if (Rarm[current] == Rarm[selected]) deltaRarm = Rarm[selected]; else deltaRarm = 90;
 	if (Shift[current] == Shift[selected]) deltaShift = Shift[selected]; else deltaShift = 0;
+	deltaarmadjust = ((float)(magics[current]->prime/10) - (float)(magics[selected]->prime/10))/morph_num;
+#endif
+#ifdef CCSG
+	for (int i=0; i<10; i++) {
+		deltalengths[i] = ((float)magics[current]->m_lengths[i] - (float)magics[selected]->m_lengths[i])/morph_num;
+		deltaangles[i] = ((float)magics[current]->m_angles[i] - (float)magics[selected]->m_angles[i])/morph_num;
+	}
+#endif
 }
 
 void applydeltas(int factor) {
+	if (HSVmorph) {
+	currH = selH + deltared*factor;
+	currS = selS + deltagreen*factor;
+	currV = selV + deltablue*factor;
+	lcolor[current] = HSV_to_RGB(currH,currS,currV);
+	} else {
 	lcolor[current] = ((int)round((float)(lcolor[selected]&0xFF)+deltared*factor)) |
 		((int)round((float)((lcolor[selected]>>8)&0xFF)+deltagreen*factor)<<8) |
 		((int)round((float)((lcolor[selected]>>16)&0xFF)+deltablue*factor)<<16);
+	}
 	magics[current]->magic_area.left = (int)round((float)magics[selected]->magic_area.left + delta12[0]*factor);
 	magics[current]->magic_area.top = (int)round((float)magics[selected]->magic_area.top + delta12[1]*factor);
 	magics[current]->magic_area.right = (int)round((float)magics[selected]->magic_area.right + delta12[2]*factor);
 	magics[current]->magic_area.bottom = (int)round((float)magics[selected]->magic_area.bottom + delta12[3]*factor);
+	magics[current]->numpoints = ((int)round((float)(magics[selected]->numpoints%3600) + deltaangleR*factor)) + ((magics[current]->numpoints>=54000)?54000:0);
+#ifdef MGS
 	magics[current]->pegL_radius = (int)round((float)magics[selected]->pegL_radius + delta12[4]*factor);
 	magics[current]->pegR_radius = (int)round((float)magics[selected]->pegR_radius + delta12[5]*factor);
 	magics[current]->armL_length = (int)round((float)magics[selected]->armL_length + delta12[6]*factor);
@@ -575,8 +897,14 @@ void applydeltas(int factor) {
 	magics[current]->pegL_angle = (int)round((float)magics[selected]->pegL_angle + delta12[10]*factor);
 	magics[current]->pegR_angle = (int)round((float)magics[selected]->pegR_angle + delta12[11]*factor);
 	magics[current]->prime = ((int)round((float)(magics[selected]->prime/10) + deltaarmadjust*factor)) *10 + (magics[current]->prime&0x1);
-	magics[current]->numpoints = ((int)round((float)(magics[selected]->numpoints%3600) + deltaangleR*factor)) + ((magics[current]->numpoints>=54000)?54000:0);
 	Larm[current] = deltaLarm; Rarm[current] = deltaRarm; Shift[current] = deltaShift;
+#endif
+#ifdef CCSG
+	for (int i=0; i<10; i++) {
+		magics[current]->m_lengths[i] = (int)round((float)magics[selected]->m_lengths[i] + deltalengths[i]*factor);
+		magics[current]->m_angles[i] = (int)round((float)magics[selected]->m_angles[i] + deltaangles[i]*factor);
+	}
+#endif
 }
 
 /************************************************************************/
@@ -659,6 +987,7 @@ unsigned int gcd(unsigned int u, unsigned int v)
 }
 //------------------------------------------------------------------------------
 
+#ifdef MGS
 void calc_arms (int flag) {
 	if (Armsplacement[current] == 4) {
 		if (flag == 1) magics[current]->armL_length =
@@ -696,6 +1025,29 @@ void Gear_cb(Fl_Widget*, void *) {
 	agg_this();
 	win->redraw();
 }
+
+void show_gears() {
+	int g, temp;
+	if (Armsplacement[current] == 4) {
+		cCenter->show();
+		cLGear->show();
+		cRGear->show();
+	} else {
+		cCenter->hide();
+		cLGear->hide();
+		cRGear->hide();
+		return;
+	}
+	g = gcd(magics[current]->gearL_radius,magics[current]->gearR_radius);
+	g = gcd(g,magics[current]->center_radius);
+	temp = magics[current]->center_radius/g; if (temp>13 || temp < 1) temp = 6;
+	cCenter->value(temp);
+	temp = magics[current]->gearL_radius/g; if (temp>13 || temp < 1) temp = 1;
+	cLGear->value(temp);
+	temp = magics[current]->gearR_radius/g; if (temp>13 || temp < 1) temp = 1;
+	cRGear->value(temp);
+}
+#endif
 
 void showC() {
 	l = magics[current]->magic_area.left;
@@ -740,28 +1092,6 @@ void adjust_bCorner() {
 	bCorner->redraw_label();
 }
 
-void show_gears() {
-	int g, temp;
-	if (Armsplacement[current] == 4) {
-		cCenter->show();
-		cLGear->show();
-		cRGear->show();
-	} else {
-		cCenter->hide();
-		cLGear->hide();
-		cRGear->hide();
-		return;
-	}
-	g = gcd(magics[current]->gearL_radius,magics[current]->gearR_radius);
-	g = gcd(g,magics[current]->center_radius);
-	temp = magics[current]->center_radius/g; if (temp>13 || temp < 1) temp = 6;
-	cCenter->value(temp);
-	temp = magics[current]->gearL_radius/g; if (temp>13 || temp < 1) temp = 1;
-	cLGear->value(temp);
-	temp = magics[current]->gearR_radius/g; if (temp>13 || temp < 1) temp = 1;
-	cRGear->value(temp);
-}
-
 void set_controls() { // this will have to deal with advanced values for arms/shift
 	int j;
 	showC();
@@ -769,6 +1099,14 @@ void set_controls() { // this will have to deal with advanced values for arms/sh
 	sprintf(s,"%d",magics[current]->numpoints%3600);
 	angleRtext->value(s);
 	adjust_bCorner();
+	Widthb[lwidth[current]-1]->setonly();
+	bColor->color(fl_rgb_color(lcolor[current] & 0xFF, (lcolor[current]>>8) & 0xFF, (lcolor[current]>>16) & 0xFF));
+	bColor->labelcolor(fl_contrast(bColor->labelcolor(),bColor->color()));
+	bColor->redraw();
+	bClip->value(magics[current]->clipradius&0x1);
+	bShape->value(magics[current]->clipradius&0x2);
+	bFine->value(magics[current]->numpoints >= 54000);
+#ifdef MGS
 	if (Larm[current] != 90) Larmb[Larm[current]-65]->setonly();
 	else for (j=0; j<18; j++) Larmb[j]->clear();
 	if (Rarm[current] != 90) Rarmb[Rarm[current]-65]->setonly();
@@ -776,15 +1114,8 @@ void set_controls() { // this will have to deal with advanced values for arms/sh
 	if (Shift[current] != 0) shiftlever->value(Shift[current]);
 	sprintf(s,"%d",Shift[current]);
 	shiftlever_e->value(s);
-	Widthb[lwidth[current]-1]->setonly();
-	bColor->color(fl_rgb_color(lcolor[current] & 0xFF, (lcolor[current]>>8) & 0xFF, (lcolor[current]>>16) & 0xFF));
-	bColor->labelcolor(fl_contrast(bColor->labelcolor(),bColor->color()));
-	bColor->redraw();
 	armsplacementb->image(armp[Armsplacement[current]-1]);
 	armsplacementb->redraw();
-	bClip->value(magics[current]->clipradius&0x1);
-	bShape->value(magics[current]->clipradius&0x2);
-	bFine->value(magics[current]->numpoints >= 54000);
 	bPrime->value(magics[current]->prime&0x1);
 	show_gears();
 	cLPeg->value(magics[current]->pegL_radius);
@@ -798,7 +1129,32 @@ void set_controls() { // this will have to deal with advanced values for arms/sh
 	cArmAdjust->value(magics[current]->prime/10);
 	sprintf(s,"%d",magics[current]->rotations);
 	rots->value(s);
+#endif
+#ifdef CCSG
+	sprintf(s,"%d",(segs[current]/4-1)/120);
+	divt->value(s);
+	for (j=0;j<8;j++) {
+		ccircles[j]->value(magics[current]->m_circles[j]);
+		cangles[j]->value(magics[current]->m_angles[j]);
+		clengths[j]->value(magics[current]->m_lengths[j]);
+	}
+#endif
 }
+
+#ifdef CCSG
+void Reset_CB(Fl_Widget*, void *) {
+	default_shape_core(magics[current]);
+	lcolor[current] = 0x00000060;
+	lwidth[current] = 2;
+	selected = -1; // means no designs
+	backcolor = -1; // White
+	update_design();
+	agg_this();
+	set_controls();
+	showT();
+	win->redraw();
+}
+#endif
 
 void Add_CB(Fl_Widget*, void *) {
 	int ret,morph;
@@ -843,7 +1199,12 @@ void Load_CB(Fl_Widget*, void *) {
 	int flag;
 	fnfc.title("Append a file to the Design suite");
 	fnfc.type(Fl_Native_File_Chooser::BROWSE_FILE);
+#ifdef MGS
 	fnfc.filter("MGS Files\t*.{MGS,mgs}");
+#endif
+#ifdef CCSG
+	fnfc.filter("CCSG Files\t*.{CCSG,mgs}");
+#endif
 	//fnfc.directory("/var/tmp");           // default directory to use
 
 	switch ( fnfc.show() ) {
@@ -852,7 +1213,7 @@ void Load_CB(Fl_Widget*, void *) {
 		case  1:
 		break;  // CANCEL
 		default:
-		flag = loadMGS(fnfc.filename());
+		flag = loadfile(fnfc.filename());
 		if (flag>0) {
 			agg_refresh(); // now provides feedback.
 			sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(fnfc.filename())); message->value(s);
@@ -886,8 +1247,14 @@ void Save_CB(Fl_Widget*, void *) {
 
 	fnfc.title("Save the Design suite to a file");
 	fnfc.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+#ifdef MGS
 	fnfc.filter("MGS Files\t*.{MGS,mgs}");
 	fnfc.preset_file("File.MGS");
+#endif
+#ifdef CCSG
+	fnfc.filter("CCSG Files\t*.{CCSG,ccsg}");
+	fnfc.preset_file("File.CCSG");
+#endif
 	fnfc.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM|Fl_Native_File_Chooser::USE_FILTER_EXT|Fl_Native_File_Chooser::NEW_FOLDER );
 
 	switch ( fnfc.show() ) {
@@ -896,7 +1263,7 @@ void Save_CB(Fl_Widget*, void *) {
 		case  1:
 		break;  // CANCEL
 		default:
-		saveMGS(fnfc.filename(),start,end);
+		savefile(fnfc.filename(),start,end);
 		sprintf(s,"Saved (%d-%d): %s",start,end,fl_filename_name(fnfc.filename())); message->value(s);
 		break;  // FILE CHOSEN
 	}
@@ -975,7 +1342,7 @@ void Kill_Bloom_CB(Fl_Widget*, void *) {
 
 static void Timer_Slow_CB(void*) {
 	if (agg_slow())
-		Fl::repeat_timeout(0.2, Timer_Slow_CB,(void*)0);
+		Fl::repeat_timeout(slow_interval, Timer_Slow_CB,(void*)0);
 	else {
 		slow_mode = false;
 		slow_idx = 0;
@@ -988,6 +1355,7 @@ static void Timer_Slow_CB(void*) {
 void Slow_CB(Fl_Widget*, void *) {
 	slow_mode = true;
 	slow_idx = 0;
+	slow_interval = 0.2;
 	buttons->hide();
 	Fl::add_timeout(0.05, Timer_Slow_CB,(void*)0);
 }
@@ -996,9 +1364,14 @@ void Kill_Slow_CB(Fl_Widget*, void *) {
 	Fl::remove_timeout(Timer_Slow_CB);
 	slow_mode = false;
 	slow_idx = 0;
+	slow_interval = 0.2;
 	agg_this();
 	buttons->show();
 	win->redraw();
+}
+
+void Change_Slow_CB(Fl_Widget*, void *factor) {
+	slow_interval *= *((float*)(factor));
 }
 
 void Color_CB(Fl_Widget*, void *) {
@@ -1025,7 +1398,12 @@ const char *modeslabel[7] = {"Move","Zoom","Bwarp","Ewarp","Rotate","Select","Pa
 
 void setwindowtitle(int mode) {
 	char title[80];
+#ifdef MGS
 	sprintf(title,"Magic Designer FLTK+AGG2D %dx%d mode: %s",width,height,modeslabel[mode]);
+#endif
+#ifdef CCSG
+	sprintf(title,"Curves Generator Screen FLTK+AGG2D %dx%d mode: %s",width,height,modeslabel[mode]);
+#endif
 	win->copy_label(title);	
 }
 
@@ -1059,7 +1437,6 @@ void Circle_cb(Fl_Widget *, void*) {
 	showR();
 	win->redraw();
 }
-
 
 void Corner_cb(Fl_Widget *, void*) {
 	int temp;
@@ -1181,7 +1558,7 @@ dir = *((int*)(&d));
 		r = magics[current]->numpoints%3600 - ud;
 		if (r >= 3600) r -= 3600;
 		if (r < 0) r += 3600; 
-		magics[current]->numpoints = ((magics[current]->numpoints>=54000)?54000:0) + r;
+		magics[current]->numpoints = magics[current]->numpoints - magics[current]->numpoints%3600 + r;
 		update_design();
 		agg_this();
 		sprintf(s,"%d",r);
@@ -1203,6 +1580,7 @@ dir = *((int*)(&d));
 	}
 }
 
+#ifdef MGS
 void leftArm_cb(Fl_Widget *, void* arm) { // need to add stuff for arm placement/sidedness
 //	Larm[current] = (int) arm;
 Larm[current] = *((int*)(&arm));
@@ -1249,48 +1627,10 @@ void shiftlever_cb(Fl_Widget *, void*) { // need to add stuff for arm placement
 	}
 }
 
-void Clip_cb(Fl_Widget *, void*) {
-	if (bClip->value()) magics[current]->clipradius = (magics[current]->clipradius&0xFFFFFFFE)|0x1;
-	else magics[current]->clipradius = magics[current]->clipradius&0xFFFFFFFE;
-	update_design();
-	agg_this();
-	win->redraw();
-}
-
-void Shape_cb(Fl_Widget *, void*) {
-	if (bShape->value()) magics[current]->clipradius = (magics[current]->clipradius&0xFFFFFFFD)|0x2;
-	else magics[current]->clipradius = magics[current]->clipradius&0xFFFFFFFD;
-	agg_this();
-	win->redraw();
-}
-
-void Fine_cb(Fl_Widget *, void*) {
-	magics[current]->numpoints %= 3600;
-	if (bFine->value()) magics[current]->numpoints += 54000;
-	update_design();
-	agg_this();
-	win->redraw();
-}
-
 void Prime_cb(Fl_Widget *, void*) {
 	if (bPrime->value()) magics[current]->prime = (magics[current]->prime&0xFFFFFFFE)|0x1;
 	else magics[current]->prime = magics[current]->prime&0xFFFFFFFE;
 	update_design();
-	agg_this();
-	win->redraw();
-}
-
-void Jagg_cb(Fl_Widget *w, void*) {
-	jagg = (((Fl_Check_Button *)w)->value());
-	if (jagg) agg_setantialias(0.01);
-	else agg_setantialias(1.0);
-	agg_refresh();
-	win->redraw();
-}
-
-void Suite_cb(Fl_Widget *w, void*) {
-	if (Mode == 6) message->value("Suite remains visible in paint mode.");
-	suite = (((Fl_Check_Button *)w)->value());
 	agg_this();
 	win->redraw();
 }
@@ -1407,6 +1747,75 @@ void cArmAdjust_cb(Fl_Widget *, void*) {
 	agg_this();
 	win->redraw();
 }
+#endif
+
+#ifdef CCSG
+void circles_cb(Fl_Widget *, void* i) {
+	int index = *((int*)(&i));
+	magics[current]->m_circles[index] = ccircles[index]->value();
+	update_design();
+	agg_this();
+	win->redraw();
+}
+
+void angles_cb(Fl_Widget *, void* i) {
+	int index = *((int*)(&i));
+	magics[current]->m_angles[index] = cangles[index]->value();
+	update_design();
+	agg_this();
+	win->redraw();
+}
+
+void lengths_cb(Fl_Widget *, void* i) {
+	int index = *((int*)(&i));
+	magics[current]->m_lengths[index] = clengths[index]->value();
+	update_design();
+	agg_this();
+	win->redraw();
+}
+#endif
+
+void Clip_cb(Fl_Widget *, void*) {
+	if (bClip->value()) magics[current]->clipradius = (magics[current]->clipradius&0xFFFFFFFE)|0x1;
+	else magics[current]->clipradius = magics[current]->clipradius&0xFFFFFFFE;
+	update_design();
+	agg_this();
+	win->redraw();
+}
+
+void Shape_cb(Fl_Widget *, void*) {
+	if (bShape->value()) magics[current]->clipradius = (magics[current]->clipradius&0xFFFFFFFD)|0x2;
+	else magics[current]->clipradius = magics[current]->clipradius&0xFFFFFFFD;
+	agg_this();
+	win->redraw();
+}
+
+void Fine_cb(Fl_Widget *, void*) {
+	magics[current]->numpoints %= 3600;
+	if (bFine->value()) magics[current]->numpoints += 54000;
+	update_design();
+	agg_this();
+	win->redraw();
+}
+
+void Jagg_cb(Fl_Widget *w, void*) {
+	jagg = (((Fl_Check_Button *)w)->value());
+	if (jagg) agg_setantialias(0.01);
+	else agg_setantialias(1.0);
+	agg_refresh();
+	win->redraw();
+}
+
+void Suite_cb(Fl_Widget *w, void*) {
+	if (Mode == 6) message->value("Suite remains visible in paint mode.");
+	suite = (((Fl_Check_Button *)w)->value());
+	agg_this();
+	win->redraw();
+}
+
+void Colormorph_cb(Fl_Widget *w, void*) {
+	HSVmorph = not HSVmorph;
+}
 
 // Callback: when user picks 'Quit'
 void quit_cb(Fl_Widget*, void*) {
@@ -1445,7 +1854,10 @@ Fl_Menu_Item rclick_inBloom_menu[] = {
 	{ 0 }
 };
 
+float slowupdown[] = {0.5,2.0};
 Fl_Menu_Item rclick_inSlow_menu[] = {
+	{ "Speed up Slow drawing",0, Change_Slow_CB, (void *)(&slowupdown[0]) },
+	{ "Slow down Slow drawing",0, Change_Slow_CB, (void *)(&slowupdown[1]) },
 	{ "Kill Slow Draw (left click to pause/restart)", 0, Kill_Slow_CB,  (void*)0 },
 	{ "Done with program",   0, quit_cb,  (void*)0 },
 	{ 0 }
@@ -1509,7 +1921,7 @@ class MyWindow : public Fl_Window { // public Fl_Double_Window {
 				}
 				if (slow_mode) { // slow mode supercedes all others and this should toggle pause.
 					if (Fl::has_timeout(Timer_Slow_CB)) Fl::remove_timeout(Timer_Slow_CB);
-					else Fl::add_timeout(0.2, Timer_Slow_CB,(void*)0);
+					else Fl::add_timeout(slow_interval, Timer_Slow_CB,(void*)0);
 					return (1);
 				}
 				if (Mode == 5) { // Select
@@ -1610,7 +2022,7 @@ class MyWindow : public Fl_Window { // public Fl_Double_Window {
 				centerX = (l+r)/2.F;
 				centerY = (t+b)/2.F;
 				temp = (int) (RD_DG(atan2(Y-centerY, X-centerX))*10.F)+1799;
-				magics[current]->numpoints = ((magics[current]->numpoints>=54000)?54000:0) + temp;
+				magics[current]->numpoints = magics[current]->numpoints - magics[current]->numpoints%3600 + temp;
 				update_design();
 				agg_this();
 				sprintf(s,"%d",temp);
@@ -1652,7 +2064,14 @@ static void Timer_CB(void*) {              // resize timer callback
 
 int main(int argc, char **argv) {
 
+#ifdef MGS
+#define buttonswidth 310
 	if (argc == 2 && argv[1][0] == '-') { printf("Usage: mdesigner [ [path/]file | - [ width_int height_int ] ]\n"); exit(0); }
+#endif
+#ifdef CCSG
+#define buttonswidth 294
+	if (argc == 2 && argv[1][0] == '-') { printf("Usage: ccsgdesigner [ [path/]file | - [ width_int height_int ] ]\n"); exit(0); }
+#endif
 	int flag;
 	int XX, YY, HH, WW;
 	Fl::screen_work_area(XX,YY,WW,HH);
@@ -1660,22 +2079,33 @@ int main(int argc, char **argv) {
 		width = atoi(argv[2]);
 		height = atoi(argv[3]);
 		if (width < 100 || height < 100) {
-			width = WW-310-10;
+			width = WW-buttonswidth-10;
 			height = HH-24;
 		}
 	} else {
-		width = WW-310-10;
+		width = WW-buttonswidth-10;
 		height = HH-24; //Fl_Window::decorated_h();
 	}
 	left = XX;
 	top= YY+20; //Fl_Window::decorated_h();
 	help = new Fl_Help_Dialog;
+#ifdef MGS
 #ifndef win32
 	icon_img = new Fl_PNG_Image("/usr/share/pixmaps/mdesigner.png"); // load icon
     help->load("/usr/share/doc/mdesigner/USEME.html");
 #else
 	icon_img = new Fl_PNG_Image("mdesigner.png"); // load icon
     help->load("USEME.html");
+#endif
+#endif
+#ifdef CCSG
+#ifndef win32
+//	icon_img = new Fl_PNG_Image("/usr/share/pixmaps/mdesigner.png"); // load icon
+    help->load("/usr/share/doc/mdesigner/USEME.html");
+#else
+//	icon_img = new Fl_PNG_Image("mdesigner.png"); // load icon
+    help->load("USEME.html");
+#endif
 #endif
 	// allocate stuff
 	stack = new Segment[MAX]; /* stack of filled segments */
@@ -1686,10 +2116,21 @@ int main(int argc, char **argv) {
 	segs = new int[current+1];
 	lcolor = new int[current+1];
 	lwidth = new int[current+1];
+#ifdef MGS
 	Larm = new int[current+1];
 	Rarm = new int[current+1];
 	Shift = new int[current+1];
 	Armsplacement = new int[current+1];
+	const char *armlabel[18] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"};
+	const char *buttonstitle = "Magic Parameters";
+	const int pxx[25] = {18,18,22,22,22,40,112,252,22,0,0,48,48,0,96,96,132,170,170,170,234,234,234,234,234};
+	const int pyy[25] = {272,288,304,320,336,368,372,100,352,388,408,408,456,456,456,408,276,0,40,100,0,20,40,60,80};
+#endif
+#ifdef CCSG
+	const char *buttonstitle = "Curves Gen. Parameters";
+	const int pxx[25] = {18,18,22,22,22,40,112,82,22,0,0,48,48,0,96,96,64,64,64,64,64,64,64,64,64};
+	const int pyy[25] = {272,288,304,320,336,368,372,220,352,388,408,408,456,456,456,408,272,0,40,100,120,140,160,180,200};
+#endif
 
 	designsCount = 0;
 	selected = -1; // means no designs
@@ -1706,12 +2147,11 @@ int main(int argc, char **argv) {
 	win->icon(icon_img);
 	win->show();
 
-	const char *armlabel[18] = {"A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R"};
 	const char *widthlabel[4] = {"1","2","3","4"};
 
-	buttons = new Fl_Window(width+10,top,310,524,"Magic Parameters");
+	buttons = new Fl_Window(width+10,top,buttonswidth,524,buttonstitle);
 	buttons->callback(quit_cb,(void *)0);
-	message = new Fl_Output(0,504,310,20);
+	message = new Fl_Output(0,504,buttonswidth,20);
 
 	Fl_Group *Modes = new Fl_Group(0,0,64,140);
 	Fl_Button *bMove = new Fl_Radio_Round_Button(0, 0, 64, 20, modeslabel[0]);
@@ -1741,45 +2181,45 @@ int main(int argc, char **argv) {
 	Modes->color(FL_BLUE);
 	Modes->tooltip("Mouse Modes");
 
-	Fl_Button *bCircle = new Fl_Button(0, 140, 64, 16, "Circle");
+	Fl_Button *bCircle = new Fl_Button(0, 140, 64, 20, "No Warp");
 	bCircle->callback(Circle_cb,(void *)0);
 	bCircle->labelcolor(FL_WHITE);
 	bCircle->color(FL_BLUE);
 	bCircle->tooltip("Remove Warp");
 
-	bCorner = new Fl_Button(0, 156, 64, 64, "B");
+	bCorner = new Fl_Button(0, 160, 64, 52, "B");
 	bCorner->callback(Corner_cb,(void *)0);
 	bCorner->labelcolor(FL_WHITE);
 	bCorner->labelsize(24);
 	bCorner->color(FL_BLUE);
 	bCorner->tooltip("Rotate by corners");
 
-	Fl_Repeat_Button *Upb = new Fl_Repeat_Button(12,220,40,20,"U");
+	Fl_Repeat_Button *Upb = new Fl_Repeat_Button(12,212,40,20,"U");
 	Upb->callback(ULRD_cb,(void *)0);
 	Upb->labelcolor(FL_WHITE);
 	Upb->color(FL_BLUE);
 	Upb->tooltip("Fine adjust current Mode");
-	Fl_Repeat_Button *Leftb = new Fl_Repeat_Button(0,240,32,20,"L");
+	Fl_Repeat_Button *Leftb = new Fl_Repeat_Button(0,232,32,20,"L");
 	Leftb->callback(ULRD_cb,(void *)1);
 	Leftb->labelcolor(FL_WHITE);
 	Leftb->color(FL_BLUE);
 	Leftb->tooltip("Fine adjust current Mode");
-	Fl_Repeat_Button *Rightb = new Fl_Repeat_Button(32,240,32,20,"R");
+	Fl_Repeat_Button *Rightb = new Fl_Repeat_Button(32,232,32,20,"R");
 	Rightb->callback(ULRD_cb,(void *)2);
 	Rightb->labelcolor(FL_WHITE);
 	Rightb->color(FL_BLUE);
 	Rightb->tooltip("Fine adjust current Mode");
-	Fl_Repeat_Button *Downb = new Fl_Repeat_Button(12,260,40,20,"D");
+	Fl_Repeat_Button *Downb = new Fl_Repeat_Button(12,252,40,20,"D");
 	Downb->callback(ULRD_cb,(void *)3);
 	Downb->labelcolor(FL_WHITE);
 	Downb->color(FL_BLUE);
 	Downb->tooltip("Fine adjust current Mode");
 
-	centerXtext = new Fl_Output(18,280,46,16,"C:");
-	centerYtext = new Fl_Output(18,296,46,16);
-	radiusXtext = new Fl_Output(22,312,42,16,"Rx");
-	radiusYtext = new Fl_Output(22,328,42,16,"Ry");
-	angleRtext = new Fl_Output(22,344,42,16,"Ra");
+	centerXtext = new Fl_Output(pxx[0],pyy[0],46,16,"C:");
+	centerYtext = new Fl_Output(pxx[1],pyy[1],46,16);
+	radiusXtext = new Fl_Output(pxx[2],pyy[2],42,16,"Rx");
+	radiusYtext = new Fl_Output(pxx[3],pyy[3],42,16,"Ry");
+	angleRtext = new Fl_Output(pxx[4],pyy[4],42,16,"Ra");
 	centerXtext->tooltip("Center X coordinate");
 	centerYtext->tooltip("Center Y coordinate");
 	radiusXtext->tooltip("Radius horizontal size");
@@ -1791,15 +2231,117 @@ int main(int argc, char **argv) {
 	radiusYtext->clear_visible_focus();
 	angleRtext->clear_visible_focus();
 
-	traces = new Fl_Output(20,388,42,16,"T:");
+	Fl_Check_Button *bGroup = new Fl_Check_Button(pxx[5],pyy[5],72,20,"Group:");
+//	bGroup->callback(Group_cb,(void *)0);
+	bGroup->box(FL_UP_BOX);
+	bGroup->value(false);
+	bGroup->color(fl_rgb_color(64,192,255));
+	bGroup->tooltip("Check to add selected designs to current group.");
+	groupt = new Fl_Output(pxx[6],pyy[6],36,16);
+	groupt->color(fl_rgb_color(64,192,255));
+	groupt->tooltip("#Designs in current group");
+	groupt->clear_visible_focus();
+
+	traces = new Fl_Output(pxx[7],pyy[7],42,16,"T:");
 	traces->color(fl_rgb_color(64,192,255));
 	traces->tooltip("#Designs in suite");
 	traces->clear_visible_focus();
-	selectedt = new Fl_Output(80,388,42,16, "S:");
+	selectedt = new Fl_Output(pxx[8],pyy[8],42,16, "S:");
 	selectedt->color(fl_rgb_color(64,192,255));
 	selectedt->tooltip("Selected design (used as base in morph)");
 	selectedt->clear_visible_focus();
 
+	cmorph = new Fl_Counter(pxx[9],pyy[9],144,20);
+	cmorph->range(1,999);
+	cmorph->step(1,50);
+	cmorph->value(1);
+	cmorph->tooltip("Used for morph designs and fine positioning.");
+
+	ADDimage = new Fl_Pixmap(addx);
+	Fl_Button *bAdd = new Fl_Button(pxx[10],pyy[10], 48, 48);
+	bAdd->image(ADDimage);
+	bAdd->callback(Add_CB,(void *)0);
+	bAdd->tooltip("Add current design or morph to Design Suite");
+	LOADimage = new Fl_Pixmap(loadx);
+	Fl_Button *bLoad = new Fl_Button(pxx[11],pyy[11], 48, 48);
+	bLoad->image(LOADimage);
+	bLoad->callback(Load_CB,(void *)0);
+	bLoad->tooltip("Load designs from a file to the Design Suite");
+	SAVEimage = new Fl_Pixmap(savex);
+	Fl_Button *bSave = new Fl_Button(pxx[12],pyy[12], 48, 48);
+	bSave->image(SAVEimage);
+	bSave->callback(Save_CB,(void *)0);
+	bSave->tooltip("Save the Design Suite to a file.");
+	DELETEimage = new Fl_Pixmap(deletex);
+	Fl_Button *bDelete = new Fl_Button(pxx[13],pyy[13], 48, 48);
+	bDelete->image(DELETEimage);
+	bDelete->callback(Delete_CB,(void *)0);
+	bDelete->tooltip("Delete/Undo designs");
+	BLOOMimage = new Fl_Pixmap(bloomx);
+	Fl_Button *bBloom = new Fl_Button(pxx[14],pyy[14], 48, 48);
+	bBloom->image(BLOOMimage);
+	bBloom->callback(Bloom_CB,(void *)0);
+	bBloom->tooltip("Start Bloom Show.\nUse Mouse on Screen to left Pause/ right Kill.");
+	SLOWimage = new Fl_Pixmap(slowx);
+	Fl_Button *bSlow = new Fl_Button(pxx[15],pyy[15], 48, 48);
+	bSlow->image(SLOWimage);
+	bSlow->callback(Slow_CB,(void *)0);
+	bSlow->tooltip("Emulate a design being drawn.\nUse Mouse on Screen to left Pause/ right Kill.");
+	PDFimage = new Fl_Pixmap(pdfx);
+	Fl_Button *bPDF = new Fl_Button(pxx[16],pyy[16],48,48);
+	bPDF->image(PDFimage);
+	bPDF->callback(PDF_CB,(void *)0);
+	bPDF->tooltip("Create a PDF file of scalable smooth curves.");
+
+	Fl_Group *Width = new Fl_Group(pxx[17],pyy[17],64,40);
+	for (int i=0; i<4; i++) {
+		Widthb[i] = new Fl_Radio_Round_Button(pxx[17]+((i/2)*32),pyy[17]+(i%2)*20,32,20,widthlabel[i]);
+		Widthb[i]->callback(width_cb,(void *)(i+1));
+	}
+	Width->end();
+	Width->box(FL_UP_BOX);
+	Width->color(fl_rgb_color(255,192,64));
+	Width->tooltip("Line Width 1=thin, 2=bold 3=thick 4=very thick");
+
+	bColor = new Fl_Button(pxx[18],pyy[18], 64, 60, "Color");
+	bColor->callback(Color_CB,(void *)0);
+	bColor->tooltip("Line or Paper Color");
+
+	Fl_Check_Button *bColormorph = new Fl_Check_Button(pxx[19],pyy[19],64,20,"HSV");
+	bColormorph->callback(Colormorph_cb,(void *)0);
+	bColormorph->box(FL_UP_BOX);
+	bColormorph->color(fl_rgb_color(64,192,255));
+	bColormorph->tooltip("Check to use HSV rather than RGB to do color morph.");
+
+	bClip = new Fl_Check_Button(pxx[20],pyy[20],72,20,"Clip");
+	bClip->callback(Clip_cb,(void *)0);
+	bClip->box(FL_UP_BOX);
+	bClip->color(fl_rgb_color(255,192,64));
+	bClip->tooltip("Check to emulate circular paper boundary.");
+	bShape = new Fl_Check_Button(pxx[21],pyy[21],72,20,"Paper");
+	bShape->callback(Shape_cb,(void *)0);
+	bShape->box(FL_UP_BOX);
+	bShape->color(fl_rgb_color(255,192,64));
+	bShape->tooltip("Check to emulate circular or rectangular paper.");
+	bFine = new Fl_Check_Button(pxx[22],pyy[22],72,20,"3X plot");
+	bFine->callback(Fine_cb,(void *)0);
+	bFine->box(FL_UP_BOX);
+	bFine->labelcolor(FL_WHITE);
+	bFine->color(FL_BLUE);
+	bFine->tooltip("Check if design curve does not seem smooth.");
+	Fl_Check_Button *bJagg = new Fl_Check_Button(pxx[23],pyy[23],72,20,"Jagged");
+	bJagg->callback(Jagg_cb,(void *)0);
+	bJagg->box(FL_UP_BOX);
+	bJagg->color(fl_rgb_color(64,192,255));
+	bJagg->tooltip("Nice curves for scaling or jagged lines for painting.");
+	Fl_Check_Button *bSuite = new Fl_Check_Button(pxx[24],pyy[24],72,20,"Suite");
+	bSuite->callback(Suite_cb,(void *)0);
+	bSuite->box(FL_UP_BOX);
+	bSuite->value(true);
+	bSuite->color(fl_rgb_color(64,192,255));
+	bSuite->tooltip("Un-Check to hide Suite of designs.");
+
+#ifdef MGS
 	Fl_Group *LArm = new Fl_Group(66,0,32,360);
 	for (int i=0;i<18;i++) {
 		Larmb[i] = new Fl_Radio_Round_Button(66,i*20,32,20,armlabel[i]);
@@ -1830,85 +2372,13 @@ int main(int argc, char **argv) {
 	shiftlever_e->tooltip("Shift Lever");
 	shiftlever_e->clear_visible_focus();
 
-	cmorph = new Fl_Counter(0,404,150,20);
-	cmorph->range(1,999);
-	cmorph->step(1,50);
-	cmorph->value(1);
-	cmorph->tooltip("Used for morph designs and fine positioning.");
-
-	Fl_Button *bAdd = new Fl_Button(0, 424, 50, 40, "Add");
-	bAdd->callback(Add_CB,(void *)0);
-	bAdd->tooltip("Add current design or morph to Design Suite");
-	Fl_Button *bLoad = new Fl_Button(50, 424, 50, 40, "Load");
-	bLoad->callback(Load_CB,(void *)0);
-	bLoad->tooltip("Load designs from a file to the Design Suite");
-	Fl_Button *bSave = new Fl_Button(50, 464, 50, 40, "Save");
-	bSave->callback(Save_CB,(void *)0);
-	bSave->tooltip("Save the Design Suite to a file.");
-	Fl_Button *bDelete = new Fl_Button(0, 464, 50, 40, "Delete");
-	bDelete->callback(Delete_CB,(void *)0);
-	bDelete->tooltip("Delete/Undo designs");
-	Fl_Button *bBloom = new Fl_Button(100, 464, 50, 40, "Bloom");
-	bBloom->callback(Bloom_CB,(void *)0);
-	bBloom->tooltip("Start Bloom Show.\nUse Mouse on Window to left Pause/ right Kill.");
-	Fl_Button *bSlow = new Fl_Button(100, 424, 50, 40, "Slow");
-	bSlow->callback(Slow_CB,(void *)0);
-	bSlow->tooltip("Emulate a design being drawn.\nUse Mouse on Window to left Pause/ right Kill.");
-	PDFimage = new Fl_Pixmap(pdfx);
-	Fl_Button *bPDF = new Fl_Button(132,276,48,48);
-	bPDF->image(PDFimage);
-	bPDF->callback(PDF_CB,(void *)0);
-	bPDF->tooltip("Create a PDF file of scalable smooth curves.");
-
-	Fl_Group *Width = new Fl_Group(170,0,64,40);
-	for (int i=0; i<4; i++) {
-		Widthb[i] = new Fl_Radio_Round_Button(170+((i/2)*32),(i%2)*20,32,20,widthlabel[i]);
-		Widthb[i]->callback(width_cb,(void *)(i+1));
-	}
-	Width->end();
-	Width->box(FL_UP_BOX);
-	Width->color(fl_rgb_color(255,192,64));
-	Width->tooltip("Line Width 1=thin, 2=bold 3=thick 4=very thick");
-
-	bColor = new Fl_Button(170, 40, 64, 60, "Color");
-	bColor->callback(Color_CB,(void *)0);
-	bColor->tooltip("Line or Paper Color");
-
-	bClip = new Fl_Check_Button(234,0,72,20,"Clip");
-	bClip->callback(Clip_cb,(void *)0);
-	bClip->box(FL_UP_BOX);
-	bClip->color(fl_rgb_color(255,192,64));
-	bClip->tooltip("Check to emulate circular paper boundary.");
-	bShape = new Fl_Check_Button(234,20,72,20,"Paper");
-	bShape->callback(Shape_cb,(void *)0);
-	bShape->box(FL_UP_BOX);
-	bShape->color(fl_rgb_color(255,192,64));
-	bShape->tooltip("Check to emulate circular or rectangular paper.");
-	bFine = new Fl_Check_Button(234,40,72,20,"3X plot");
-	bFine->callback(Fine_cb,(void *)0);
-	bFine->box(FL_UP_BOX);
-	bFine->labelcolor(FL_WHITE);
-	bFine->color(FL_BLUE);
-	bFine->tooltip("Check if design curve does not seem smooth.");
-	Fl_Check_Button *bJagg = new Fl_Check_Button(234,60,72,20,"Jagged");
-	bJagg->callback(Jagg_cb,(void *)0);
-	bJagg->box(FL_UP_BOX);
-	bJagg->color(fl_rgb_color(64,192,255));
-	bJagg->tooltip("Nice curves for scaling or jagged lines for painting.");
-	Fl_Check_Button *bSuite = new Fl_Check_Button(234,80,72,20,"Suite");
-	bSuite->callback(Suite_cb,(void *)0);
-	bSuite->box(FL_UP_BOX);
-	bSuite->value(true);
-	bSuite->color(fl_rgb_color(64,192,255));
-	bSuite->tooltip("Un-Check to hide Suite of designs.");
-
 	armp[0] = new Fl_Pixmap(armsplace1);
 	armp[1] = new Fl_Pixmap(armsplace2);
 	armp[2] = new Fl_Pixmap(armsplace3);
 	armp[3] = new Fl_Pixmap(armsplace4);
 	armp[4] = new Fl_Pixmap(armsplace5);
 	armp[5] = new Fl_Pixmap(armsplace6);
-	armsplacementb = new Fl_Button(166,118,144,144);
+	armsplacementb = new Fl_Button(166,120,144,144);
 	armsplacementb->callback(armsp_cb,(void *)0);
 	armsplacementb->tooltip("Click to cycle to the next arms placement (there are 6).\nAlso used to reset values below.");
 
@@ -1994,13 +2464,52 @@ int main(int argc, char **argv) {
 	bPrime->box(FL_UP_BOX);
 	bPrime->color(fl_rgb_color(192,128,192));
 	bPrime->tooltip("Un-Check to emulate putting pen arms on upside down.");
+#endif
+
+#ifdef CCSG
+	divt = new Fl_Output(88,256,36,16, "Rs:");
+	divt->tooltip("Revolutions needed for selected shape");
+	divt->clear_visible_focus();
+	Fl_Button *bReset = new Fl_Button(64, 320, 48, 24, "Reset");
+	bReset->callback(Reset_CB,(void *)0);
+	bReset->tooltip("Reset current design to what it was on start up.");
+
+	static char segments_tooltips[8][3][40];
+	for (int i=0; i<8; i++) {
+		new Fl_Box(Fl_Boxtype::FL_BORDER_BOX,146,i*63,146,63,NULL);
+		ccircles[i] = new Fl_Counter(150,i*63+2,140,20);
+		ccircles[i]->range(-999,999);
+		ccircles[i]->step(1,50);
+		ccircles[i]->value(0);
+		ccircles[i]->color(fl_rgb_color(64,128,255));
+		ccircles[i]->callback(circles_cb,(void *)(i));
+		sprintf(segments_tooltips[i][0],"Circle rate for Segment %d",i+1);
+		ccircles[i]->tooltip(segments_tooltips[i][0]);
+		clengths[i] = new Fl_Counter(150,i*63+22,140,20);
+		clengths[i]->range(0,9999);
+		clengths[i]->step(1,50);
+		clengths[i]->value(0);
+		clengths[i]->color(fl_rgb_color(128,128,255));
+		clengths[i]->callback(lengths_cb,(void *)(i));
+		sprintf(segments_tooltips[i][1],"Length for Segment %d",i+1);
+		clengths[i]->tooltip(segments_tooltips[i][1]);
+		cangles[i] = new Fl_Counter(150,i*63+42,140,20);
+		cangles[i]->range(0,3599);
+		cangles[i]->step(1,50);
+		cangles[i]->value(0);
+		cangles[i]->color(fl_rgb_color(192,128,255));
+		cangles[i]->callback(angles_cb,(void *)(i));
+		sprintf(segments_tooltips[i][2],"Start angle tenth deg for Segment %d",i+1);
+		cangles[i]->tooltip(segments_tooltips[i][2]);
+	}
+#endif
 
 	message->clear_visible_focus();
 
 	Fl::add_handler(HelpKey);
 
 	flag = 0;
-	if (argc > 1 && argv[1][0] != '-') flag = loadMGS(argv[1]);
+	if (argc > 1 && argv[1][0] != '-') flag = loadfile(argv[1]);
 	if (flag>0) {
 		agg_refresh();
 		sprintf(s,"Loaded %d from: %s",flag, fl_filename_name(argv[1])); message->value(s);
